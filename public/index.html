@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saileeich TTS</title>
+  <link rel="stylesheet" href="./css/index.css">
+</head>
+<body>
+  <header>
+    <h1>Saileeich TTS</h1>
+    <nav>
+      <a href="/moderation.html" target="_blank">Moderation Panel</a>
+      <a href="/streamer.html" target="_blank">Streamer TTS Dashboard</a>
+    </nav>
+  </header>
+  
+  <main>
+    <section id="connection">
+      <div class="input-section">
+        <input type="text" id="username" placeholder="Enter TikTok Username (without @)" />
+        <input type="text" id="sessionId" placeholder="Session ID (optional, improves connection reliability)" />
+        <button id="connectBtn" onclick="startLive()">Connect To Live</button>
+        <button id="disconnectBtn" onclick="disconnectLive()" style="display: none;">Disconnect</button>
+      </div>
+      
+      <div class="session-info">
+        <small><strong>Session ID:</strong> Optional but recommended for better connection stability. 
+        To get your session ID: Open TikTok in your browser, go to your live stream, 
+        open Developer Tools (F12), go to Application/Storage > Cookies, and copy the 'sessionid' value.</small>
+      </div>
+      
+      <div class="connection-status" id="connectionStatus">
+        <span id="statusText">Not connected</span>
+      </div>
+    </section>
+    
+    <div id="log"></div>
+  </main>
+  
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/index.js"></script>
+</body>
+</html>

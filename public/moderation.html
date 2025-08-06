@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comment Moderation</title>
+    <link rel="stylesheet" href="./css/moderation.css">
+</head>
+<body>
+    <header>
+        <h1>Saileeich TTS</h1>
+        <div id="status">Not Connected</div>
+    </header>
+    
+    <main>
+        <section>
+            <h2>Pending Comments</h2>
+            <ul id="queue"></ul>
+            <div id="no-comments" style="display: none;">
+                <p>No comments pending moderation</p>
+                <p><small>Try clicking "Add Test Comment" above to test the connection</small></p>
+            </div>
+        </section>
+    </main>
+
+    <script src="./js/moderation.js"></script>
+</body>
+</html>

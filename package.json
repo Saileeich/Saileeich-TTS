@@ -1,0 +1,17 @@
+{
+  "name": "tiktok-live-viewer",
+  "version": "1.0.0",
+  "description": "View and interact with TikTok Live comments",
+  "main": "app.js",
+  "scripts": {
+    "debug": "nodemon app.js",
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "http": "^0.0.1-security",
+    "socket.io": "^4.7.2",
+    "tiktok-live-connector": "^2.0.7-alpha2",
+    "ws": "^8.18.3"
+  }
+}

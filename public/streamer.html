@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streamer TTS Dashboard</title>
+    <link rel="stylesheet" href="./css/streamer.css">
+</head>
+<body>
+    <header>
+        <h1>Saileeich TTS</h1>
+        <div class="status-bar">
+            <div id="queue-count" class="queue-counter">Queue: 0</div>
+            <div id="moderator-count" class="moderator-counter">Moderators: 0</div>
+            <div id="connection-status" class="status-indicator">Disconnected</div>
+        </div>
+    </header>
+    
+    <main>
+        <!-- TTS Controls Section -->
+        <section class="tts-controls">
+            <h2>TTS Controls</h2>
+            
+            <div class="control-row">
+                <button id="play-pause-btn" class="control-btn primary" disabled>Start Queue</button>
+                <button id="skip-btn" class="control-btn secondary" disabled>Skip Current</button>
+                <button id="clear-queue-btn" class="control-btn danger">Clear Queue</button>
+            </div>
+            
+            <div class="control-row">
+                <div class="volume-control">
+                    <label for="volume-slider">Volume:</label>
+                    <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="0.8">
+                    <span id="volume-display">80%</span>
+                </div>
+                
+                <div class="speed-control">
+                    <label for="speed-slider">Speed:</label>
+                    <input type="range" id="speed-slider" min="0.5" max="2" step="0.1" value="1">
+                    <span id="speed-display">1x</span>
+                </div>
+            </div>
+            
+            <div class="control-row">
+                <div class="voice-control">
+                    <label for="voice-select">Voice:</label>
+                    <select id="voice-select">
+                        <option value="">Default Voice</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Manual Moderation Toggle -->
+            <div class="moderation-toggle">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="manual-moderation-toggle" checked>
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label">Manual Moderation</span>
+                </label>
+                <div class="toggle-description">
+                    <span id="moderation-status-text">Comments require moderator approval</span>
+                </div>
+            </div>
+            
+            <!-- Filter Settings Section -->
+            <div class="filter-settings">
+                <h3>User Filter</h3>
+                
+                
+                <div class="filter-options">
+                    <div class="filter-option">
+                        <input type="radio" id="filter-everybody" name="comment-filter" value="everybody" checked>
+                        <label for="filter-everybody">
+                            <span class="filter-text">Everybody</span>
+                            <span class="filter-desc">All comments go to moderation</span>
+                        </label>
+                    </div>
+                    
+                    <div class="filter-option">
+                        <input type="radio" id="filter-followers" name="comment-filter" value="followers">
+                        <label for="filter-followers">
+                            <span class="filter-text">Followers Only</span>
+                            <span class="filter-desc">Only followers' comments go to moderation</span>
+                        </label>
+                    </div>
+                    
+                    <div class="filter-option">
+                        <input type="radio" id="filter-gifters" name="comment-filter" value="gifters">
+                        <label for="filter-gifters">
+                            <span class="filter-text">Gifters Only</span>
+                            <span class="filter-desc">Only gifters' comments go to moderation</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        
+        <!-- Current TTS Section -->
+        <section class="current-tts">
+            <h2>Currently Speaking</h2>
+            <div id="current-comment" class="current-comment-card">
+                <div class="comment-username">@nobody</div>
+                <div class="comment-text">Nothing is currently being spoken</div>
+                <div class="comment-progress">
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TTS Queue Section -->
+            <div class="tts-queue">
+                <h2>TTS Queue</h2>
+                
+                <div id="queue-container">
+                    <ul id="tts-queue-list"></ul>
+                    <div id="empty-queue" class="empty-state">
+                        <p>No comments in TTS queue</p>
+                        <p>Comments will appear here when approved by moderators</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+    </main>
+
+    <script src="./js/streamer.js"></script>
+</body>
+</html>
