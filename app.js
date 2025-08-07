@@ -183,8 +183,8 @@ io.on('connection', (socket) => {
                 // Send to all live viewer clients
                 io.emit('viewer-data', viewerData);
                 
-                // Add comment to moderation queue if it exists and passes filter
-                if (viewerData.comment && viewerData.comment.trim()) {
+                // Add comment to moderation queue if it exists, starts with a period, and passes filter
+                if (viewerData.comment && viewerData.comment.trim() && viewerData.comment.trim().startsWith('.')) {
                     console.log('Processing comment from:', viewerData.username);
                     console.log('Comment text:', viewerData.comment);
                     console.log('Passes filter:', passesFilter(viewerData));

@@ -46,7 +46,7 @@ function startTikTokLive(username, sessionId, onComment) {
         const user = msg.user || {};
         if (user.uniqueId) {
             gifters.add(user.uniqueId);
-            console.log(`🎁 ${user.uniqueId} sent a gift`);
+            console.log(`${user.uniqueId} sent a gift`);
         }
     });
 
