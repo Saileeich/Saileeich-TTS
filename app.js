@@ -46,7 +46,8 @@ const streamerClients = new Set();
 
 let streamerSettings = {
     filter: 'everybody', // everybody, followers, gifters
-    manualModeration: true
+    manualModeration: true,
+    requirePeriod: true // Whether comments need to start with a period
 };
 
 // TikTok Live connection management
@@ -161,7 +162,7 @@ io.on('connection', (socket) => {
         const username = typeof connectionData === 'string' ? connectionData : connectionData.username;
         const sessionId = typeof connectionData === 'object' ? connectionData.sessionId : undefined;
         
-        console.log(`🎥 Request to start TikTok Live listener for ${username}${sessionId ? ' with session ID' : ''}`);
+        console.log(`Request to start TikTok Live listener for ${username}${sessionId ? ' with session ID' : ''}`);
         
         // Check if already connected to someone else
         if (currentTikTokConnection && connectedUsername !== username) {
@@ -188,16 +189,28 @@ io.on('connection', (socket) => {
                 // Send to all live viewer clients
                 io.emit('viewer-data', viewerData);
                 
-                // Add comment to moderation queue if it exists, starts with a period, and passes filter
-                if (viewerData.comment && viewerData.comment.trim() && viewerData.comment.trim().startsWith('.')) {
-                    console.log('Processing comment from:', viewerData.username);
-                    console.log('Comment text:', viewerData.comment);
-                    console.log('Passes filter:', passesFilter(viewerData));
-                    console.log('Current filter setting:', streamerSettings.filter);
-                    console.log('Manual moderation enabled:', streamerSettings.manualModeration);
+                // Add comment to moderation queue if it exists and passes filter
+                // Also check if period is required and present
+                if (viewerData.comment && viewerData.comment.trim()) {
+                    const commentText = viewerData.comment.trim();
+                    const shouldProcess = streamerSettings.requirePeriod ? 
+                        commentText.startsWith('.') : 
+                        true;
                     
-                    if (passesFilter(viewerData)) {
-                        const sanitizedText = sanitizeComment(viewerData.comment.trim());
+                    if (shouldProcess && passesFilter(viewerData)) {
+                        console.log('Processing comment from:', viewerData.username);
+                        console.log('Comment text:', viewerData.comment);
+                        console.log('Passes filter:', passesFilter(viewerData));
+                        console.log('Current filter setting:', streamerSettings.filter);
+                        console.log('Manual moderation enabled:', streamerSettings.manualModeration);
+                        console.log('Require period:', streamerSettings.requirePeriod);
+                        
+                        // Remove the leading period if present and required
+                        const textToSanitize = streamerSettings.requirePeriod && commentText.startsWith('.') ? 
+                            commentText.substring(1) : 
+                            commentText;
+                        
+                        const sanitizedText = sanitizeComment(textToSanitize);
                         
                         // Check if comment is empty after sanitization
                         if (!sanitizedText || sanitizedText.trim().length === 0) {

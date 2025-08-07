@@ -15,6 +15,7 @@ class StreamerTTSDashboard {
         
         // Moderation Settings
         this.manualModerationEnabled = true;
+        this.requirePeriod = true;
         this.moderatorCount = 0;
         
         // Elements
@@ -30,6 +31,7 @@ class StreamerTTSDashboard {
         this.setupFilterControls();
         this.setupVoices();
         this.updateModerationStatusText();
+        this.updatePeriodStatusText();
         this.updateFilterDescriptions();
         this.updateModeratorCounter();
         this.updateUI();
@@ -53,7 +55,9 @@ class StreamerTTSDashboard {
             queueList: document.getElementById('tts-queue-list'),
             emptyQueue: document.getElementById('empty-queue'),
             manualModerationToggle: document.getElementById('manual-moderation-toggle'),
-            moderationStatusText: document.getElementById('moderation-status-text')
+            moderationStatusText: document.getElementById('moderation-status-text'),
+            periodRequirementToggle: document.getElementById('period-requirement-toggle'),
+            periodStatusText: document.getElementById('period-status-text')
         };
     }
 
@@ -183,6 +187,12 @@ class StreamerTTSDashboard {
             this.updateModerationSettings();
         });
         
+        // Period requirement toggle
+        this.elements.periodRequirementToggle.addEventListener('change', (e) => {
+            this.requirePeriod = e.target.checked;
+            this.updatePeriodSettings();
+        });
+        
         // Filter radio buttons
         const filterRadios = document.querySelectorAll('input[name="comment-filter"]');
         filterRadios.forEach(radio => {
@@ -203,7 +213,8 @@ class StreamerTTSDashboard {
                 type: 'update_settings',
                 settings: { 
                     filter: filterValue,
-                    manualModeration: this.manualModerationEnabled
+                    manualModeration: this.manualModerationEnabled,
+                    requirePeriod: this.requirePeriod
                 }
             }));
         }
@@ -219,7 +230,8 @@ class StreamerTTSDashboard {
                 type: 'update_settings',
                 settings: { 
                     filter: currentFilter,
-                    manualModeration: this.manualModerationEnabled
+                    manualModeration: this.manualModerationEnabled,
+                    requirePeriod: this.requirePeriod
                 }
             }));
         }
@@ -245,6 +257,13 @@ class StreamerTTSDashboard {
             this.manualModerationEnabled = settings.manualModeration;
             this.elements.manualModerationToggle.checked = settings.manualModeration;
             this.updateModerationStatusText();
+        }
+
+        // Update period requirement toggle if provided
+        if (settings.requirePeriod !== undefined) {
+            this.requirePeriod = settings.requirePeriod;
+            this.elements.periodRequirementToggle.checked = settings.requirePeriod;
+            this.updatePeriodStatusText();
         }
 
         // Update status text
@@ -275,6 +294,33 @@ class StreamerTTSDashboard {
                     break;
             }
         });
+    }
+
+    updatePeriodSettings() {
+        console.log('Updating period requirement to:', this.requirePeriod);
+        
+        // Send period requirement update to server
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            const currentFilter = document.querySelector('input[name="comment-filter"]:checked')?.value || 'everybody';
+            this.socket.send(JSON.stringify({
+                type: 'update_settings',
+                settings: { 
+                    filter: currentFilter,
+                    manualModeration: this.manualModerationEnabled,
+                    requirePeriod: this.requirePeriod
+                }
+            }));
+        }
+
+        // Update period status text
+        this.updatePeriodStatusText();
+    }
+
+    updatePeriodStatusText() {
+        const statusText = this.requirePeriod 
+            ? 'Comments must start with "."'
+            : 'All comments are accepted';
+        this.elements.periodStatusText.textContent = statusText;
     }
 
     setupVoices() {
