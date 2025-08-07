@@ -13,7 +13,7 @@ function sanitizeComment(comment) {
     // - Numbers (0-9)
     // - Common punctuation and symbols for readability
     // - Spaces and basic formatting
-    return comment.replace(/[^a-zA-Z0-9\s.,!?'"()-]/g, '').trim();
+    return comment.replace(/[^a-zA-Z0-9\s]/g, '').trim();
 }
 
 const app = express();
