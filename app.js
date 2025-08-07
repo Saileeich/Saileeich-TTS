@@ -328,9 +328,18 @@ app.get('/debug', (req, res) => {
     });
 });
 
+// Serve static files for moderation and streamer interfaces
+app.get('/moderation', (req, res) => {
+    res.sendFile(__dirname + '/public/moderation.html');
+});
+
+app.get('/streamer', (req, res) => {
+    res.sendFile(__dirname + '/public/streamer.html');
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-    console.log(`Moderation interface available at http://localhost:${PORT}/moderation.html`);
-    console.log(`Streamer interface available at http://localhost:${PORT}/streamer.html`);
+    console.log(`Server running at http://localhost:${PORT}/`);
+    console.log(`Moderation interface available at http://localhost:${PORT}/moderation`);
+    console.log(`Streamer interface available at http://localhost:${PORT}/streamer`);
 });
