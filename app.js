@@ -4,16 +4,22 @@ const { Server } = require('socket.io');
 const { WebSocketServer } = require('ws');
 const startTikTokLive = require('./tiktok');
 
-// Function to sanitize comment text - remove non-English alphabet characters but keep numbers
+// Array of phrases to remove from comments
+const bannedPhrases = ['europe itch', 'gabe itch', 'pho q'];
+
 function sanitizeComment(comment) {
     if (!comment || typeof comment !== 'string') return '';
     
-    // Remove any characters that are not:
-    // - English letters (a-z, A-Z)
-    // - Numbers (0-9)
-    // - Common punctuation and symbols for readability
-    // - Spaces and basic formatting
-    return comment.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+    let sanitized = comment;
+    
+    bannedPhrases.forEach(phrase => {
+        const regex = new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        sanitized = sanitized.replace(regex, '');
+    });
+    
+    sanitized = sanitized.replace(/[^a-zA-Z0-9\s]/g, '');
+    
+    return sanitized.replace(/\s+/g, ' ').trim();
 }
 
 const app = express();
@@ -38,10 +44,9 @@ const moderationClients = new Set();
 // WebSocket clients for streamer interface
 const streamerClients = new Set();
 
-// Streamer filter settings
 let streamerSettings = {
-    filter: 'everybody', // 'everybody', 'followers', 'gifters'
-    manualModeration: true // Whether comments need manual approval
+    filter: 'everybody', // everybody, followers, gifters
+    manualModeration: true
 };
 
 // TikTok Live connection management
