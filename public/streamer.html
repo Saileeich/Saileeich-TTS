@@ -10,7 +10,8 @@
     <header>
         <h1>Saileeich TTS</h1>
         <div class="status-bar">
-            <div id="queue-count" class="queue-counter">Queue: 0</div>
+            <div id="queue-count" class="queue-counter">Total Queue: 0/5</div>
+            <div id="moderation-count" class="moderation-counter">Moderation: 0</div>
             <div id="moderator-count" class="moderator-counter">Moderators: 0</div>
             <div id="connection-status" class="status-indicator">Disconnected</div>
         </div>
@@ -50,39 +51,53 @@
                 </div>
             </div>
             
-            <!-- Manual Moderation Toggle -->
-            <div class="moderation-toggle">
-                <label class="toggle-switch">
-                    <input type="checkbox" id="manual-moderation-toggle" checked>
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-label">Manual Moderation</span>
-                </label>
-                <div class="toggle-description">
-                    <span id="moderation-status-text">Comments require moderator approval</span>
+            <!-- Manual Moderation and Period Requirement Toggles -->
+            <div class="toggle-row">
+                <div class="moderation-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="manual-moderation-toggle" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Manual Moderation</span>
+                    </label>
+                    <div class="toggle-description">
+                        <span id="moderation-status-text">Comments require moderator approval</span>
+                    </div>
+                </div>
+                
+                <div class="moderation-toggle">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="period-requirement-toggle" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Require Period</span>
+                    </label>
+                    <div class="toggle-description">
+                        <span id="period-status-text">Comments must start with "."</span>
+                    </div>
                 </div>
             </div>
             
-            <!-- Period Requirement Toggle -->
-            <div class="moderation-toggle">
-                <label class="toggle-switch">
-                    <input type="checkbox" id="period-requirement-toggle" checked>
-                    <span class="toggle-slider"></span>
-                    <span class="toggle-label">Require Period</span>
-                </label>
-                <div class="toggle-description">
-                    <span id="period-status-text">Comments must start with "."</span>
+            <!-- Comment Cooldown and Max Queue Size Settings -->
+            <div class="settings-row">
+                <div class="cooldown-setting">
+                    <label for="cooldown-input">Comment Cooldown (seconds):</label>
+                    <div class="cooldown-control">
+                        <input type="number" id="cooldown-input" min="1" max="300" step="1" value="5">
+                        <span class="cooldown-unit">seconds</span>
+                    </div>
+                    <div class="cooldown-description">
+                        <span>Time between comments from the same user</span>
+                    </div>
                 </div>
-            </div>
-            
-            <!-- Comment Cooldown Setting -->
-            <div class="cooldown-setting">
-                <label for="cooldown-input">Comment Cooldown (seconds):</label>
-                <div class="cooldown-control">
-                    <input type="number" id="cooldown-input" min="1" max="300" step="1" value="30">
-                    <span class="cooldown-unit">seconds</span>
-                </div>
-                <div class="cooldown-description">
-                    <span>Time between comments from the same user</span>
+                
+                <div class="queue-size-setting">
+                    <label for="max-queue-size-input">Max Queue Size:</label>
+                    <div class="queue-size-control">
+                        <input type="number" id="max-queue-size-input" min="1" max="100" step="1" value="5">
+                        <span class="queue-size-unit">comments</span>
+                    </div>
+                    <div class="queue-size-description">
+                        <span>Maximum number of comments in queue before rejecting new ones</span>
+                    </div>
                 </div>
             </div>
             
@@ -141,7 +156,7 @@
                     <ul id="tts-queue-list"></ul>
                     <div id="empty-queue" class="empty-state">
                         <p>No comments in TTS queue</p>
-                        <p>Comments will appear here when approved by moderators</p>
+                        <p>Comments will appear here when approved by the system</p>
                     </div>
                 </div>
             </div>

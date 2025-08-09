@@ -16,8 +16,10 @@ class StreamerTTSDashboard {
         // Moderation Settings
         this.manualModerationEnabled = true;
         this.requirePeriod = true;
-        this.commentCooldown = 30; // seconds
+        this.commentCooldown = 5; // seconds
+        this.maxQueueSize = 5; // maximum number of comments in queue
         this.moderatorCount = 0;
+        this.moderationQueueSize = 0; // track moderation queue size
         
         // Elements
         this.elements = {};
@@ -35,6 +37,7 @@ class StreamerTTSDashboard {
         this.updatePeriodStatusText();
         this.updateFilterDescriptions();
         this.updateModeratorCounter();
+        this.updateModerationCounter();
         this.updateUI();
     }
 
@@ -42,6 +45,7 @@ class StreamerTTSDashboard {
         this.elements = {
             connectionStatus: document.getElementById('connection-status'),
             queueCount: document.getElementById('queue-count'),
+            moderationCount: document.getElementById('moderation-count'),
             moderatorCount: document.getElementById('moderator-count'),
             playPauseBtn: document.getElementById('play-pause-btn'),
             skipBtn: document.getElementById('skip-btn'),
@@ -59,7 +63,8 @@ class StreamerTTSDashboard {
             moderationStatusText: document.getElementById('moderation-status-text'),
             periodRequirementToggle: document.getElementById('period-requirement-toggle'),
             periodStatusText: document.getElementById('period-status-text'),
-            cooldownInput: document.getElementById('cooldown-input')
+            cooldownInput: document.getElementById('cooldown-input'),
+            maxQueueSizeInput: document.getElementById('max-queue-size-input')
         };
     }
 
@@ -111,16 +116,29 @@ class StreamerTTSDashboard {
                 this.moderatorCount = data.count;
                 this.updateModeratorCounter();
                 break;
+            case 'moderation_queue_update':
+                this.moderationQueueSize = data.queueSize || 0;
+                this.updateModerationCounter();
+                break;
         }
     }
 
     addToTTSQueue(comment) {
+        // Check if queue is full before adding
+        if (this.ttsQueue.length >= this.maxQueueSize) {
+            console.log(`TTS queue is full (${this.maxQueueSize} comments), rejecting comment from ${comment.username}`);
+            return; // Don't add to queue if it's full
+        }
+        
         this.ttsQueue.push({
             id: comment.id || Date.now(),
             username: comment.username || 'anonymous',
             text: comment.text,
             timestamp: new Date()
         });
+
+        // Notify server about queue addition
+        this.notifyServerTTSQueueUpdate('add', comment);
 
         this.updateQueueDisplay();
         this.updateQueueCounter();
@@ -194,9 +212,36 @@ class StreamerTTSDashboard {
         // Comment cooldown input
         this.elements.cooldownInput.addEventListener('input', (e) => {
             const value = parseInt(e.target.value);
-            if (!isNaN(value) && value >= 5 && value <= 300) {
+            if (!isNaN(value) && value >= 1 && value <= 300) {
                 this.commentCooldown = value;
                 this.updateCooldownSettings();
+            }
+        });
+        
+        // Also handle when user finishes editing (blur event)
+        this.elements.cooldownInput.addEventListener('blur', (e) => {
+            const value = parseInt(e.target.value);
+            if (isNaN(value) || value < 1 || value > 300) {
+                // Reset to current valid value if invalid
+                e.target.value = this.commentCooldown;
+            }
+        });
+        
+        // Max queue size input
+        this.elements.maxQueueSizeInput.addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            if (!isNaN(value) && value >= 1 && value <= 100) {
+                this.maxQueueSize = value;
+                this.updateMaxQueueSizeSettings();
+            }
+        });
+        
+        // Also handle when user finishes editing (blur event)
+        this.elements.maxQueueSizeInput.addEventListener('blur', (e) => {
+            const value = parseInt(e.target.value);
+            if (isNaN(value) || value < 1 || value > 100) {
+                // Reset to current valid value if invalid
+                e.target.value = this.maxQueueSize;
             }
         });
         
@@ -220,7 +265,8 @@ class StreamerTTSDashboard {
                     filter: filterValue,
                     manualModeration: this.manualModerationEnabled,
                     requirePeriod: this.requirePeriod,
-                    commentCooldown: this.commentCooldown
+                    commentCooldown: this.commentCooldown,
+                    maxQueueSize: this.maxQueueSize
                 }
             }));
         }
@@ -236,7 +282,8 @@ class StreamerTTSDashboard {
                     filter: currentFilter,
                     manualModeration: this.manualModerationEnabled,
                     requirePeriod: this.requirePeriod,
-                    commentCooldown: this.commentCooldown
+                    commentCooldown: this.commentCooldown,
+                    maxQueueSize: this.maxQueueSize
                 }
             }));
         }
@@ -269,10 +316,24 @@ class StreamerTTSDashboard {
             this.updatePeriodStatusText();
         }
 
-        // Update comment cooldown if provided
+        // Update comment cooldown if provided and different from current input value
         if (settings.commentCooldown !== undefined) {
             this.commentCooldown = settings.commentCooldown;
-            this.elements.cooldownInput.value = settings.commentCooldown;
+            // Only update input if it's not currently focused and the value is different
+            if (document.activeElement !== this.elements.cooldownInput && 
+                parseInt(this.elements.cooldownInput.value) !== settings.commentCooldown) {
+                this.elements.cooldownInput.value = settings.commentCooldown;
+            }
+        }
+
+        // Update max queue size if provided and different from current input value
+        if (settings.maxQueueSize !== undefined) {
+            this.maxQueueSize = settings.maxQueueSize;
+            // Only update input if it's not currently focused and the value is different
+            if (document.activeElement !== this.elements.maxQueueSizeInput && 
+                parseInt(this.elements.maxQueueSizeInput.value) !== settings.maxQueueSize) {
+                this.elements.maxQueueSizeInput.value = settings.maxQueueSize;
+            }
         }
 
         // Update status text
@@ -315,7 +376,8 @@ class StreamerTTSDashboard {
                     filter: currentFilter,
                     manualModeration: this.manualModerationEnabled,
                     requirePeriod: this.requirePeriod,
-                    commentCooldown: this.commentCooldown
+                    commentCooldown: this.commentCooldown,
+                    maxQueueSize: this.maxQueueSize
                 }
             }));
         }
@@ -334,9 +396,46 @@ class StreamerTTSDashboard {
                     filter: currentFilter,
                     manualModeration: this.manualModerationEnabled,
                     requirePeriod: this.requirePeriod,
-                    commentCooldown: this.commentCooldown
+                    commentCooldown: this.commentCooldown,
+                    maxQueueSize: this.maxQueueSize
                 }
             }));
+        }
+    }
+
+    updateMaxQueueSizeSettings() {
+        // Send max queue size update to server
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            const currentFilter = document.querySelector('input[name="comment-filter"]:checked')?.value || 'everybody';
+            this.socket.send(JSON.stringify({
+                type: 'update_settings',
+                settings: { 
+                    filter: currentFilter,
+                    manualModeration: this.manualModerationEnabled,
+                    requirePeriod: this.requirePeriod,
+                    commentCooldown: this.commentCooldown,
+                    maxQueueSize: this.maxQueueSize
+                }
+            }));
+        }
+    }
+
+    notifyServerTTSQueueUpdate(action, comment = null, commentId = null) {
+        // Send TTS queue update to server for tracking
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            const updateData = {
+                type: 'tts_queue_update',
+                action: action // 'add', 'remove', 'clear'
+            };
+            
+            if (comment) {
+                updateData.comment = comment;
+            }
+            if (commentId) {
+                updateData.commentId = commentId;
+            }
+            
+            this.socket.send(JSON.stringify(updateData));
         }
     }
 
@@ -418,6 +517,10 @@ class StreamerTTSDashboard {
         this.stopQueue();
         this.ttsQueue = [];
         this.currentIndex = 0;
+        
+        // Notify server about queue clear
+        this.notifyServerTTSQueueUpdate('clear');
+        
         this.updateQueueDisplay();
         this.updateQueueCounter();
     }
@@ -457,8 +560,17 @@ class StreamerTTSDashboard {
         utterance.onend = () => {
             this.currentUtterance = null;
             
+            // Get the comment that was just completed before removing it
+            const completedComment = this.ttsQueue[this.currentIndex];
+            
             // Remove completed comment from queue
             this.ttsQueue.splice(this.currentIndex, 1);
+            
+            // Notify server about queue removal
+            if (completedComment) {
+                this.notifyServerTTSQueueUpdate('remove', null, completedComment.id);
+            }
+            
             this.updateQueueCounter();
             this.updateQueueDisplay();
             
@@ -479,7 +591,16 @@ class StreamerTTSDashboard {
             
             // Skip to next comment on error
             if (this.isPlaying) {
+                // Get the comment that errored before removing it
+                const erroredComment = this.ttsQueue[this.currentIndex];
+                
                 this.ttsQueue.splice(this.currentIndex, 1);
+                
+                // Notify server about queue removal
+                if (erroredComment) {
+                    this.notifyServerTTSQueueUpdate('remove', null, erroredComment.id);
+                }
+                
                 this.updateQueueCounter();
                 this.updateQueueDisplay();
                 setTimeout(() => {
@@ -544,7 +665,16 @@ class StreamerTTSDashboard {
         if (index === this.currentIndex && this.isPlaying) {
             this.skipCurrent();
         } else {
+            // Get the comment that will be removed
+            const removedComment = this.ttsQueue[index];
+            
             this.ttsQueue.splice(index, 1);
+            
+            // Notify server about queue removal
+            if (removedComment) {
+                this.notifyServerTTSQueueUpdate('remove', null, removedComment.id);
+            }
+            
             if (index < this.currentIndex) {
                 this.currentIndex--;
             }
@@ -554,7 +684,36 @@ class StreamerTTSDashboard {
     }
 
     updateQueueCounter() {
-        this.elements.queueCount.textContent = `Queue: ${this.ttsQueue.length}`;
+        const ttsQueueSize = this.ttsQueue.length;
+        const totalQueueSize = ttsQueueSize + this.moderationQueueSize;
+        const maxSize = this.maxQueueSize;
+        
+        this.elements.queueCount.textContent = `Total Queue: ${totalQueueSize}/${maxSize}`;
+        
+        // Add visual warning when total queue is getting full
+        if (totalQueueSize >= maxSize) {
+            this.elements.queueCount.classList.add('queue-full');
+            this.elements.queueCount.classList.remove('queue-warning');
+        } else if (totalQueueSize >= maxSize * 0.8) {
+            this.elements.queueCount.classList.add('queue-warning');
+            this.elements.queueCount.classList.remove('queue-full');
+        } else {
+            this.elements.queueCount.classList.remove('queue-warning', 'queue-full');
+        }
+    }
+
+    updateModerationCounter() {
+        this.elements.moderationCount.textContent = `Moderation: ${this.moderationQueueSize}`;
+        
+        // Add visual indicator when there are pending comments
+        if (this.moderationQueueSize > 0) {
+            this.elements.moderationCount.classList.add('has-pending');
+        } else {
+            this.elements.moderationCount.classList.remove('has-pending');
+        }
+        
+        // Update the total queue counter since moderation queue size changed
+        this.updateQueueCounter();
     }
 
     updateModeratorCounter() {
