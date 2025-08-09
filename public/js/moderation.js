@@ -16,7 +16,6 @@ class ModerationInterface {
         const statusElement = document.getElementById('status');
 
         this.socket.onopen = () => {
-            console.log('Connected to moderation WebSocket');
             statusElement.textContent = 'Connected';
             statusElement.className = 'connected';
             
@@ -25,7 +24,6 @@ class ModerationInterface {
         };
 
         this.socket.onclose = () => {
-            console.log('Disconnected from moderation WebSocket');
             statusElement.textContent = 'Disconnected';
             statusElement.className = 'disconnected';
             
@@ -158,7 +156,6 @@ class ModerationInterface {
             }
 
             const result = await response.json();
-            console.log('Comment approved:', result);
         } catch (error) {
             console.error('Error approving comment:', error);
             alert('Failed to approve comment. Please try again.');
@@ -180,7 +177,6 @@ class ModerationInterface {
             }
 
             const result = await response.json();
-            console.log('Comment denied:', result);
         } catch (error) {
             console.error('Error denying comment:', error);
             alert('Failed to deny comment. Please try again.');

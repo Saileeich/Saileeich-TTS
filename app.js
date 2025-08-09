@@ -47,8 +47,12 @@ const streamerClients = new Set();
 let streamerSettings = {
     filter: 'everybody', // everybody, followers, gifters
     manualModeration: true,
-    requirePeriod: true // Whether comments need to start with a period
+    requirePeriod: true, // Whether comments need to start with a period
+    commentCooldown: 30 // Cooldown in seconds between comments from the same user
 };
+
+// Track user comment timestamps for spam protection
+const userCommentTimestamps = new Map();
 
 // TikTok Live connection management
 let currentTikTokConnection = null;
@@ -56,8 +60,6 @@ let connectedUsername = null;
 
 // WebSocket server for moderation and streamer interfaces
 wss.on('connection', (ws, request) => {
-    console.log('New WebSocket connection received');
-    
     // Handle client identification
     ws.on('message', (message) => {
         try {
@@ -66,7 +68,6 @@ wss.on('connection', (ws, request) => {
             if (data.type === 'client_type') {
                 if (data.clientType === 'moderation') {
                     moderationClients.add(ws);
-                    console.log('Moderation WebSocket client connected');
                     
                     // Send current queue immediately
                     ws.send(JSON.stringify({ type: 'queue_init', queue: unmoderated }));
@@ -76,7 +77,6 @@ wss.on('connection', (ws, request) => {
                     
                 } else if (data.clientType === 'streamer') {
                     streamerClients.add(ws);
-                    console.log('Streamer WebSocket client connected');
                     
                     // Send current settings immediately
                     ws.send(JSON.stringify({ type: 'settings_init', settings: streamerSettings }));
@@ -88,7 +88,6 @@ wss.on('connection', (ws, request) => {
             } else if (data.type === 'update_settings' && streamerClients.has(ws)) {
                 // Handle streamer settings updates
                 streamerSettings = { ...streamerSettings, ...data.settings };
-                console.log('Updated streamer settings:', streamerSettings);
                 
                 // Broadcast settings to all streamer clients
                 broadcastToStreamers({ type: 'settings_update', settings: streamerSettings });
@@ -101,13 +100,11 @@ wss.on('connection', (ws, request) => {
     ws.on('close', () => {
         if (moderationClients.has(ws)) {
             moderationClients.delete(ws);
-            console.log('Moderation client disconnected');
             
             // Broadcast updated moderator count to streamers
             broadcastModeratorCount();
         } else if (streamerClients.has(ws)) {
             streamerClients.delete(ws);
-            console.log('Streamer client disconnected');
         }
     });
 });
@@ -147,10 +144,28 @@ function passesFilter(viewerData) {
     }
 }
 
+// Helper to check if user is in comment cooldown
+function isUserInCooldown(username) {
+    if (!username) return false;
+    
+    const lastCommentTime = userCommentTimestamps.get(username);
+    if (!lastCommentTime) return false;
+    
+    const now = Date.now();
+    const cooldownMs = streamerSettings.commentCooldown * 1000;
+    
+    return (now - lastCommentTime) < cooldownMs;
+}
+
+// Helper to update user comment timestamp
+function updateUserCommentTime(username) {
+    if (username) {
+        userCommentTimestamps.set(username, Date.now());
+    }
+}
+
 // Socket.IO for main live viewer
 io.on('connection', (socket) => {
-    console.log('Live viewer client connected');
-
     // Send current connection status
     socket.emit('connection-status', {
         isConnected: currentTikTokConnection !== null,
@@ -184,8 +199,6 @@ io.on('connection', (socket) => {
         // Start new connection
         try {
             currentTikTokConnection = startTikTokLive(username, sessionId, (viewerData) => {
-                console.log('Received viewer data:', viewerData);
-                
                 // Send to all live viewer clients
                 io.emit('viewer-data', viewerData);
                 
@@ -198,12 +211,11 @@ io.on('connection', (socket) => {
                         true;
                     
                     if (shouldProcess && passesFilter(viewerData)) {
-                        console.log('Processing comment from:', viewerData.username);
-                        console.log('Comment text:', viewerData.comment);
-                        console.log('Passes filter:', passesFilter(viewerData));
-                        console.log('Current filter setting:', streamerSettings.filter);
-                        console.log('Manual moderation enabled:', streamerSettings.manualModeration);
-                        console.log('Require period:', streamerSettings.requirePeriod);
+                        // Check spam protection
+                        const username = viewerData.username || 'anonymous';
+                        if (isUserInCooldown(username)) {
+                            return;
+                        }
                         
                         // Remove the leading period if present and required
                         const textToSanitize = streamerSettings.requirePeriod && commentText.startsWith('.') ? 
@@ -214,33 +226,29 @@ io.on('connection', (socket) => {
                         
                         // Check if comment is empty after sanitization
                         if (!sanitizedText || sanitizedText.trim().length === 0) {
-                            console.log('Comment is empty after sanitization, skipping:', viewerData.comment);
                             return;
                         }
+                        
+                        // Update user comment timestamp to start cooldown
+                        updateUserCommentTime(username);
                         
                         const comment = {
                             id: Date.now() + Math.random(), // Ensure uniqueness
                             text: sanitizedText,
-                            username: viewerData.username || 'anonymous',
+                            username: username,
                             isFollower: viewerData.isFollower || false,
                             hasSentGift: viewerData.hasSentGift || false
                         };
                         
                         if (streamerSettings.manualModeration) {
                             // Send to moderation queue for manual approval
-                            console.log('Adding comment to moderation queue:', comment);
                             unmoderated.push(comment);
                             broadcastToModerators({ type: 'new_comment', comment });
                         } else {
                             // Send directly to TTS (bypass moderation)
-                            console.log('Sending comment directly to TTS (moderation bypassed):', comment);
                             broadcastToStreamers({ type: 'tts', comment: comment });
                         }
-                    } else {
-                        console.log('Comment filtered out due to settings');
                     }
-                } else {
-                    console.log('No comment or empty comment, skipping');
                 }
             });
 
@@ -261,8 +269,6 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect-live', () => {
-        console.log('Request to disconnect from TikTok Live');
-        
         if (currentTikTokConnection) {
             try {
                 // Disconnect from TikTok Live
@@ -277,8 +283,6 @@ io.on('connection', (socket) => {
                     isConnected: false,
                     username: null
                 });
-                
-                console.log('Successfully disconnected from TikTok Live');
                 
             } catch (error) {
                 console.error('Error disconnecting from TikTok Live:', error);
@@ -357,7 +361,5 @@ app.get('/streamer', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}/`);
-    console.log(`Moderation interface available at http://localhost:${PORT}/moderation`);
-    console.log(`Streamer interface available at http://localhost:${PORT}/streamer`);
+    return
 });
