@@ -56,7 +56,6 @@ class StreamerTTSDashboard {
             speedDisplay: document.getElementById('speed-display'),
             voiceSelect: document.getElementById('voice-select'),
             currentComment: document.getElementById('current-comment'),
-            progressFill: document.getElementById('progress-fill'),
             queueList: document.getElementById('tts-queue-list'),
             emptyQueue: document.getElementById('empty-queue'),
             manualModerationToggle: document.getElementById('manual-moderation-toggle'),

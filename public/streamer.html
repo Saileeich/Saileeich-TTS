@@ -20,13 +20,7 @@
     <main>
         <!-- TTS Controls Section -->
         <section class="tts-controls">
-            <h2>TTS Controls</h2>
-            
-            <div class="control-row">
-                <button id="play-pause-btn" class="control-btn primary" disabled>Start Queue</button>
-                <button id="skip-btn" class="control-btn secondary" disabled>Skip Current</button>
-                <button id="clear-queue-btn" class="control-btn danger">Clear Queue</button>
-            </div>
+            <h2>Controls</h2>
             
             <div class="control-row">
                 <div class="volume-control">
@@ -137,20 +131,22 @@
         
         <!-- Current TTS Section -->
         <section class="current-tts">
-            <h2>Currently Speaking</h2>
+            <h2>TTS</h2>
+
+            <div class="control-row">
+                <button id="play-pause-btn" class="control-btn primary" disabled>Start Queue</button>
+                <button id="skip-btn" class="control-btn secondary" disabled>Skip Current</button>
+                <button id="clear-queue-btn" class="control-btn danger">Clear Queue</button>
+            </div>
+
             <div id="current-comment" class="current-comment-card">
                 <div class="comment-username">@nobody</div>
                 <div class="comment-text">Nothing is currently being spoken</div>
-                <div class="comment-progress">
-                    <div class="progress-bar">
-                        <div id="progress-fill" class="progress-fill"></div>
-                    </div>
-                </div>
             </div>
 
             <!-- TTS Queue Section -->
             <div class="tts-queue">
-                <h2>TTS Queue</h2>
+                <h2>Queue</h2>
                 
                 <div id="queue-container">
                     <ul id="tts-queue-list"></ul>
