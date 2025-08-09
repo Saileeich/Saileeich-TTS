@@ -16,6 +16,7 @@ class StreamerTTSDashboard {
         // Moderation Settings
         this.manualModerationEnabled = true;
         this.requirePeriod = true;
+        this.commentCooldown = 30; // seconds
         this.moderatorCount = 0;
         
         // Elements
@@ -57,7 +58,8 @@ class StreamerTTSDashboard {
             manualModerationToggle: document.getElementById('manual-moderation-toggle'),
             moderationStatusText: document.getElementById('moderation-status-text'),
             periodRequirementToggle: document.getElementById('period-requirement-toggle'),
-            periodStatusText: document.getElementById('period-status-text')
+            periodStatusText: document.getElementById('period-status-text'),
+            cooldownInput: document.getElementById('cooldown-input')
         };
     }
 
@@ -67,7 +69,6 @@ class StreamerTTSDashboard {
         this.socket = new WebSocket(`${protocol}//${host}/ws`);
 
         this.socket.onopen = () => {
-            console.log('Connected to TTS WebSocket');
             this.elements.connectionStatus.textContent = 'Connected';
             this.elements.connectionStatus.className = 'status-indicator connected';
             
@@ -76,7 +77,6 @@ class StreamerTTSDashboard {
         };
 
         this.socket.onclose = () => {
-            console.log('Disconnected from TTS WebSocket');
             this.elements.connectionStatus.textContent = 'Disconnected';
             this.elements.connectionStatus.className = 'status-indicator disconnected';
             
@@ -99,7 +99,6 @@ class StreamerTTSDashboard {
     }
 
     handleMessage(data) {
-        console.log('Received message:', data);
         switch (data.type) {
             case 'tts':
                 this.addToTTSQueue(data.comment);
@@ -116,7 +115,6 @@ class StreamerTTSDashboard {
     }
 
     addToTTSQueue(comment) {
-        console.log('Adding comment to TTS queue:', comment);
         this.ttsQueue.push({
             id: comment.id || Date.now(),
             username: comment.username || 'anonymous',
@@ -193,6 +191,15 @@ class StreamerTTSDashboard {
             this.updatePeriodSettings();
         });
         
+        // Comment cooldown input
+        this.elements.cooldownInput.addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            if (!isNaN(value) && value >= 5 && value <= 300) {
+                this.commentCooldown = value;
+                this.updateCooldownSettings();
+            }
+        });
+        
         // Filter radio buttons
         const filterRadios = document.querySelectorAll('input[name="comment-filter"]');
         filterRadios.forEach(radio => {
@@ -205,8 +212,6 @@ class StreamerTTSDashboard {
     }
 
     updateFilter(filterValue) {
-        console.log('Updating filter to:', filterValue);
-        
         // Send filter update to server
         if (this.socket && this.socket.readyState === WebSocket.OPEN) {
             this.socket.send(JSON.stringify({
@@ -214,15 +219,14 @@ class StreamerTTSDashboard {
                 settings: { 
                     filter: filterValue,
                     manualModeration: this.manualModerationEnabled,
-                    requirePeriod: this.requirePeriod
+                    requirePeriod: this.requirePeriod,
+                    commentCooldown: this.commentCooldown
                 }
             }));
         }
     }
 
     updateModerationSettings() {
-        console.log('Updating manual moderation to:', this.manualModerationEnabled);
-        
         // Send moderation update to server
         if (this.socket && this.socket.readyState === WebSocket.OPEN) {
             const currentFilter = document.querySelector('input[name="comment-filter"]:checked')?.value || 'everybody';
@@ -231,7 +235,8 @@ class StreamerTTSDashboard {
                 settings: { 
                     filter: currentFilter,
                     manualModeration: this.manualModerationEnabled,
-                    requirePeriod: this.requirePeriod
+                    requirePeriod: this.requirePeriod,
+                    commentCooldown: this.commentCooldown
                 }
             }));
         }
@@ -244,8 +249,6 @@ class StreamerTTSDashboard {
     }
 
     updateFilterSettings(settings) {
-        console.log('Received filter settings:', settings);
-        
         // Update radio button selection
         const filterRadio = document.querySelector(`input[value="${settings.filter}"]`);
         if (filterRadio) {
@@ -264,6 +267,12 @@ class StreamerTTSDashboard {
             this.requirePeriod = settings.requirePeriod;
             this.elements.periodRequirementToggle.checked = settings.requirePeriod;
             this.updatePeriodStatusText();
+        }
+
+        // Update comment cooldown if provided
+        if (settings.commentCooldown !== undefined) {
+            this.commentCooldown = settings.commentCooldown;
+            this.elements.cooldownInput.value = settings.commentCooldown;
         }
 
         // Update status text
@@ -297,9 +306,7 @@ class StreamerTTSDashboard {
     }
 
     updatePeriodSettings() {
-        console.log('Updating period requirement to:', this.requirePeriod);
-        
-        // Send period requirement update to server
+        // Send period update to server
         if (this.socket && this.socket.readyState === WebSocket.OPEN) {
             const currentFilter = document.querySelector('input[name="comment-filter"]:checked')?.value || 'everybody';
             this.socket.send(JSON.stringify({
@@ -307,13 +314,30 @@ class StreamerTTSDashboard {
                 settings: { 
                     filter: currentFilter,
                     manualModeration: this.manualModerationEnabled,
-                    requirePeriod: this.requirePeriod
+                    requirePeriod: this.requirePeriod,
+                    commentCooldown: this.commentCooldown
                 }
             }));
         }
 
         // Update period status text
         this.updatePeriodStatusText();
+    }
+
+    updateCooldownSettings() {
+        // Send cooldown update to server
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            const currentFilter = document.querySelector('input[name="comment-filter"]:checked')?.value || 'everybody';
+            this.socket.send(JSON.stringify({
+                type: 'update_settings',
+                settings: { 
+                    filter: currentFilter,
+                    manualModeration: this.manualModerationEnabled,
+                    requirePeriod: this.requirePeriod,
+                    commentCooldown: this.commentCooldown
+                }
+            }));
+        }
     }
 
     updatePeriodStatusText() {
@@ -327,28 +351,16 @@ class StreamerTTSDashboard {
         const loadVoices = () => {
             const voices = speechSynthesis.getVoices();
             this.elements.voiceSelect.innerHTML = '<option value="">Default Voice</option>';
-            
-            // Filter for English voices and prioritize them
-            const englishVoices = voices.filter(voice => 
-                voice.lang.toLowerCase().startsWith('en')
-            );
-            
-            const otherVoices = voices.filter(voice => 
-                !voice.lang.toLowerCase().startsWith('en')
-            );
 
-            [...englishVoices, ...otherVoices].forEach(voice => {
+            voices.forEach(voice => {
                 const option = document.createElement('option');
                 option.value = voice.name;
                 option.textContent = `${voice.name} (${voice.lang})`;
                 this.elements.voiceSelect.appendChild(option);
             });
 
-            // Auto-select the first English voice if available
-            if (englishVoices.length > 0) {
-                this.selectedVoice = englishVoices[0];
-                this.elements.voiceSelect.value = englishVoices[0].name;
-            }
+            this.selectedVoice = voices[0];
+            this.elements.voiceSelect.value = voices[0].name;
         };
 
         if (speechSynthesis.getVoices().length > 0) {
@@ -426,8 +438,6 @@ class StreamerTTSDashboard {
     }
 
     speakComment(comment) {
-        console.log('Speaking comment:', comment.text);
-        
         // Update current display
         this.updateCurrentDisplay(comment);
         
@@ -444,12 +454,7 @@ class StreamerTTSDashboard {
             utterance.voice = this.selectedVoice;
         }
 
-        utterance.onstart = () => {
-            console.log('TTS started for:', comment.username);
-        };
-
         utterance.onend = () => {
-            console.log('TTS finished for:', comment.username);
             this.currentUtterance = null;
             
             // Remove completed comment from queue

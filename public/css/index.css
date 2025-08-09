@@ -218,6 +218,15 @@ button:hover {
         padding: 1rem;
     }
     
+    header h1 {
+        text-align: center;
+    }
+    
+    nav {
+        justify-content: center;
+        gap: 0.8em;
+    }
+    
     #connection {
         width: 90vw;
         padding: 0.8em;
@@ -252,11 +261,6 @@ button:hover {
     main {
         padding: 1rem;
         margin: 1em;
-    }
-    
-    nav {
-        justify-content: center;
-        gap: 0.8em;
     }
 }
 

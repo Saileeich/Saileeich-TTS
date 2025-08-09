@@ -15,7 +15,6 @@ function startTikTokLive(username, sessionId, onComment) {
     // Add session ID if provided
     if (sessionId && sessionId.trim()) {
         connectionOptions.sessionId = sessionId.trim();
-        console.log(`Using session ID for improved connection reliability`);
     }
     
     const connection = new TikTokLiveConnection(username, connectionOptions);
@@ -46,7 +45,6 @@ function startTikTokLive(username, sessionId, onComment) {
         const user = msg.user || {};
         if (user.uniqueId) {
             gifters.add(user.uniqueId);
-            console.log(`${user.uniqueId} sent a gift`);
         }
     });
 
