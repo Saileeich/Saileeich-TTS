@@ -38,6 +38,9 @@ app.use(express.static('public'));
 let unmoderated = [];
 let approved = [];
 
+// Server-side TTS queue tracking
+let serverTTSQueue = [];
+
 // WebSocket clients for moderation interface
 const moderationClients = new Set();
 
@@ -48,7 +51,8 @@ let streamerSettings = {
     filter: 'everybody', // everybody, followers, gifters
     manualModeration: true,
     requirePeriod: true, // Whether comments need to start with a period
-    commentCooldown: 30 // Cooldown in seconds between comments from the same user
+    commentCooldown: 5, // Cooldown in seconds between comments from the same user
+    maxQueueSize: 5 // Maximum number of comments in queue before rejecting new ones
 };
 
 // Track user comment timestamps for spam protection
@@ -78,19 +82,51 @@ wss.on('connection', (ws, request) => {
                 } else if (data.clientType === 'streamer') {
                     streamerClients.add(ws);
                     
+                    // Reset server TTS queue when a new streamer connects to avoid stale data
+                    if (streamerClients.size === 1) {
+                        console.log(`First streamer client connected, resetting server TTS queue`);
+                        serverTTSQueue = [];
+                    }
+                    
                     // Send current settings immediately
                     ws.send(JSON.stringify({ type: 'settings_init', settings: streamerSettings }));
                     
                     // Send current moderator count immediately
                     const moderatorCount = Array.from(moderationClients).filter(ws => ws.readyState === 1).length;
                     ws.send(JSON.stringify({ type: 'moderator_count', count: moderatorCount }));
+                    
+                    // Send current moderation queue size immediately
+                    ws.send(JSON.stringify({ type: 'moderation_queue_update', queueSize: unmoderated.length }));
                 }
             } else if (data.type === 'update_settings' && streamerClients.has(ws)) {
                 // Handle streamer settings updates
+                const oldSettings = { ...streamerSettings };
                 streamerSettings = { ...streamerSettings, ...data.settings };
+                
+                // Check if manual moderation was turned off
+                if (oldSettings.manualModeration === true && streamerSettings.manualModeration === false) {
+                    console.log(`Manual moderation disabled, clearing ${unmoderated.length} pending comments`);
+                    // Clear the moderation queue since comments would now go directly to TTS
+                    unmoderated = [];
+                    // Notify moderators that queue was cleared
+                    broadcastToModerators({ type: 'queue_update', queue: unmoderated });
+                    // Notify streamers about moderation queue size change
+                    broadcastToStreamers({ type: 'moderation_queue_update', queueSize: unmoderated.length });
+                }
                 
                 // Broadcast settings to all streamer clients
                 broadcastToStreamers({ type: 'settings_update', settings: streamerSettings });
+            } else if (data.type === 'tts_queue_update' && streamerClients.has(ws)) {
+                // Handle TTS queue updates from streamer clients
+                console.log(`TTS queue update: ${data.action}`, data.comment ? `comment: ${data.comment.username}` : `commentId: ${data.commentId}`);
+                if (data.action === 'add' && data.comment) {
+                    addToServerTTSQueue(data.comment);
+                } else if (data.action === 'remove' && data.commentId) {
+                    removeFromServerTTSQueue(data.commentId);
+                } else if (data.action === 'clear') {
+                    console.log(`Clearing server TTS queue (was ${serverTTSQueue.length} items)`);
+                    serverTTSQueue = [];
+                }
             }
         } catch (error) {
             console.error('Error parsing WebSocket message:', error);
@@ -164,6 +200,38 @@ function updateUserCommentTime(username) {
     }
 }
 
+// Helper to check if queue is full (considers both moderation and TTS queues)
+function isQueueFull() {
+    const moderationQueueSize = unmoderated.length;
+    const ttsQueueSize = serverTTSQueue.length;
+    const totalQueueSize = moderationQueueSize + ttsQueueSize;
+    console.log(`Queue check: moderation=${moderationQueueSize}, tts=${ttsQueueSize}, total=${totalQueueSize}, limit=${streamerSettings.maxQueueSize}`);
+    return totalQueueSize >= streamerSettings.maxQueueSize;
+}
+
+// Helper to add comment to server TTS queue
+function addToServerTTSQueue(comment) {
+    if (serverTTSQueue.length >= streamerSettings.maxQueueSize) {
+        console.log(`Server TTS queue full: ${serverTTSQueue.length}/${streamerSettings.maxQueueSize}`);
+        return false; // Queue is full
+    }
+    serverTTSQueue.push(comment);
+    console.log(`Added to server TTS queue: ${comment.username} - "${comment.text}" (queue size: ${serverTTSQueue.length})`);
+    return true;
+}
+
+// Helper to remove comment from server TTS queue
+function removeFromServerTTSQueue(commentId) {
+    const index = serverTTSQueue.findIndex(c => c.id === commentId);
+    if (index !== -1) {
+        const removedComment = serverTTSQueue.splice(index, 1)[0];
+        console.log(`Removed from server TTS queue: ${removedComment.username} - "${removedComment.text}" (queue size: ${serverTTSQueue.length})`);
+        return true;
+    }
+    console.log(`Failed to remove comment with ID ${commentId} from server TTS queue`);
+    return false;
+}
+
 // Socket.IO for main live viewer
 io.on('connection', (socket) => {
     // Send current connection status
@@ -211,6 +279,12 @@ io.on('connection', (socket) => {
                         true;
                     
                     if (shouldProcess && passesFilter(viewerData)) {
+                        // Check if queue is full before processing
+                        if (isQueueFull()) {
+                            console.log(`Queue is full (${streamerSettings.maxQueueSize} comments), rejecting comment from ${viewerData.username}`);
+                            return; // Reject the comment if queue is full
+                        }
+                        
                         // Check spam protection
                         const username = viewerData.username || 'anonymous';
                         if (isUserInCooldown(username)) {
@@ -244,9 +318,17 @@ io.on('connection', (socket) => {
                             // Send to moderation queue for manual approval
                             unmoderated.push(comment);
                             broadcastToModerators({ type: 'new_comment', comment });
+                            // Notify streamers about moderation queue size change
+                            broadcastToStreamers({ type: 'moderation_queue_update', queueSize: unmoderated.length });
                         } else {
                             // Send directly to TTS (bypass moderation)
-                            broadcastToStreamers({ type: 'tts', comment: comment });
+                            // Check if TTS queue would be full after adding this comment
+                            if (serverTTSQueue.length >= streamerSettings.maxQueueSize) {
+                                console.log(`TTS queue is full (${streamerSettings.maxQueueSize} comments), rejecting direct TTS comment from ${username}`);
+                            } else {
+                                // Send to TTS - the client will handle adding to server queue via tts_queue_update
+                                broadcastToStreamers({ type: 'tts', comment: comment });
+                            }
                         }
                     }
                 }
@@ -313,11 +395,21 @@ app.post('/approve', (req, res) => {
     const approvedComment = unmoderated.splice(index, 1)[0];
     approved.push(approvedComment);
 
-    // Broadcast TTS event and queue update
-    broadcastToStreamers({ type: 'tts', comment: approvedComment });
-    broadcastToModerators({ type: 'queue_update', queue: unmoderated });
-
-    res.json({ message: 'Comment approved', comment: approvedComment });
+    // Check if TTS queue would be full after adding this comment
+    if (serverTTSQueue.length >= streamerSettings.maxQueueSize) {
+        // TTS queue is full, but still remove from moderation queue
+        broadcastToModerators({ type: 'queue_update', queue: unmoderated });
+        // Notify streamers about moderation queue size change
+        broadcastToStreamers({ type: 'moderation_queue_update', queueSize: unmoderated.length });
+        res.json({ message: 'Comment approved but TTS queue is full', comment: approvedComment, queueFull: true });
+    } else {
+        // Send to TTS - the client will handle adding to server queue via tts_queue_update
+        broadcastToStreamers({ type: 'tts', comment: approvedComment });
+        broadcastToModerators({ type: 'queue_update', queue: unmoderated });
+        // Notify streamers about moderation queue size change
+        broadcastToStreamers({ type: 'moderation_queue_update', queueSize: unmoderated.length });
+        res.json({ message: 'Comment approved and added to TTS queue', comment: approvedComment });
+    }
 });
 
 // Deny comment
@@ -330,6 +422,8 @@ app.post('/deny', (req, res) => {
 
     broadcastToModerators({ type: 'denied', comment: deniedComment });
     broadcastToModerators({ type: 'queue_update', queue: unmoderated });
+    // Notify streamers about moderation queue size change
+    broadcastToStreamers({ type: 'moderation_queue_update', queueSize: unmoderated.length });
 
     res.json({ message: 'Comment denied', comment: deniedComment });
 });
@@ -344,9 +438,12 @@ app.get('/debug', (req, res) => {
     res.json({
         unmoderated: unmoderated,
         approved: approved,
+        serverTTSQueue: serverTTSQueue,
         settings: streamerSettings,
         moderationClients: moderationClients.size,
-        streamerClients: streamerClients.size
+        streamerClients: streamerClients.size,
+        totalQueueSize: unmoderated.length + serverTTSQueue.length,
+        queueSizeLimit: streamerSettings.maxQueueSize
     });
 });
 
