@@ -125,7 +125,6 @@ class StreamerTTSDashboard {
     addToTTSQueue(comment) {
         // Check if queue is full before adding
         if (this.ttsQueue.length >= this.maxQueueSize) {
-            console.log(`TTS queue is full (${this.maxQueueSize} comments), rejecting comment from ${comment.username}`);
             return; // Don't add to queue if it's full
         }
         

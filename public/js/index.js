@@ -6,6 +6,7 @@ let connectedUsername = null;
 function startLive() {
     const username = document.getElementById('username').value.trim();
     const sessionId = document.getElementById('sessionId').value.trim();
+    
     if (username) {
         const connectionData = { username };
         if (sessionId) {

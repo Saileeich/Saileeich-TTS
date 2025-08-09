@@ -4,6 +4,8 @@ const { Server } = require('socket.io');
 const { WebSocketServer } = require('ws');
 const startTikTokLive = require('./tiktok');
 
+console.log('Starting TikTok TTS server');
+
 // Array of phrases to remove from comments
 const bannedPhrases = ['europe itch', 'gabe itch', 'pho q'];
 
@@ -71,6 +73,7 @@ wss.on('connection', (ws, request) => {
             
             if (data.type === 'client_type') {
                 if (data.clientType === 'moderation') {
+                    console.log('New moderation client connected');
                     moderationClients.add(ws);
                     
                     // Send current queue immediately
@@ -80,11 +83,11 @@ wss.on('connection', (ws, request) => {
                     broadcastModeratorCount();
                     
                 } else if (data.clientType === 'streamer') {
+                    console.log('New streamer client connected');
                     streamerClients.add(ws);
                     
                     // Reset server TTS queue when a new streamer connects to avoid stale data
                     if (streamerClients.size === 1) {
-                        console.log(`First streamer client connected, resetting server TTS queue`);
                         serverTTSQueue = [];
                     }
                     
@@ -105,7 +108,6 @@ wss.on('connection', (ws, request) => {
                 
                 // Check if manual moderation was turned off
                 if (oldSettings.manualModeration === true && streamerSettings.manualModeration === false) {
-                    console.log(`Manual moderation disabled, clearing ${unmoderated.length} pending comments`);
                     // Clear the moderation queue since comments would now go directly to TTS
                     unmoderated = [];
                     // Notify moderators that queue was cleared
@@ -118,13 +120,11 @@ wss.on('connection', (ws, request) => {
                 broadcastToStreamers({ type: 'settings_update', settings: streamerSettings });
             } else if (data.type === 'tts_queue_update' && streamerClients.has(ws)) {
                 // Handle TTS queue updates from streamer clients
-                console.log(`TTS queue update: ${data.action}`, data.comment ? `comment: ${data.comment.username}` : `commentId: ${data.commentId}`);
                 if (data.action === 'add' && data.comment) {
                     addToServerTTSQueue(data.comment);
                 } else if (data.action === 'remove' && data.commentId) {
                     removeFromServerTTSQueue(data.commentId);
                 } else if (data.action === 'clear') {
-                    console.log(`Clearing server TTS queue (was ${serverTTSQueue.length} items)`);
                     serverTTSQueue = [];
                 }
             }
@@ -205,18 +205,15 @@ function isQueueFull() {
     const moderationQueueSize = unmoderated.length;
     const ttsQueueSize = serverTTSQueue.length;
     const totalQueueSize = moderationQueueSize + ttsQueueSize;
-    console.log(`Queue check: moderation=${moderationQueueSize}, tts=${ttsQueueSize}, total=${totalQueueSize}, limit=${streamerSettings.maxQueueSize}`);
     return totalQueueSize >= streamerSettings.maxQueueSize;
 }
 
 // Helper to add comment to server TTS queue
 function addToServerTTSQueue(comment) {
     if (serverTTSQueue.length >= streamerSettings.maxQueueSize) {
-        console.log(`Server TTS queue full: ${serverTTSQueue.length}/${streamerSettings.maxQueueSize}`);
         return false; // Queue is full
     }
     serverTTSQueue.push(comment);
-    console.log(`Added to server TTS queue: ${comment.username} - "${comment.text}" (queue size: ${serverTTSQueue.length})`);
     return true;
 }
 
@@ -225,10 +222,8 @@ function removeFromServerTTSQueue(commentId) {
     const index = serverTTSQueue.findIndex(c => c.id === commentId);
     if (index !== -1) {
         const removedComment = serverTTSQueue.splice(index, 1)[0];
-        console.log(`Removed from server TTS queue: ${removedComment.username} - "${removedComment.text}" (queue size: ${serverTTSQueue.length})`);
         return true;
     }
-    console.log(`Failed to remove comment with ID ${commentId} from server TTS queue`);
     return false;
 }
 
@@ -244,9 +239,7 @@ io.on('connection', (socket) => {
         // Handle both old string format and new object format for backwards compatibility
         const username = typeof connectionData === 'string' ? connectionData : connectionData.username;
         const sessionId = typeof connectionData === 'object' ? connectionData.sessionId : undefined;
-        
-        console.log(`Request to start TikTok Live listener for ${username}${sessionId ? ' with session ID' : ''}`);
-        
+                
         // Check if already connected to someone else
         if (currentTikTokConnection && connectedUsername !== username) {
             socket.emit('connection-error', {
@@ -266,6 +259,7 @@ io.on('connection', (socket) => {
 
         // Start new connection
         try {
+            console.log(`Connecting to TikTok Live: @${username}`);
             currentTikTokConnection = startTikTokLive(username, sessionId, (viewerData) => {
                 // Send to all live viewer clients
                 io.emit('viewer-data', viewerData);
@@ -281,7 +275,6 @@ io.on('connection', (socket) => {
                     if (shouldProcess && passesFilter(viewerData)) {
                         // Check if queue is full before processing
                         if (isQueueFull()) {
-                            console.log(`Queue is full (${streamerSettings.maxQueueSize} comments), rejecting comment from ${viewerData.username}`);
                             return; // Reject the comment if queue is full
                         }
                         
@@ -324,7 +317,6 @@ io.on('connection', (socket) => {
                             // Send directly to TTS (bypass moderation)
                             // Check if TTS queue would be full after adding this comment
                             if (serverTTSQueue.length >= streamerSettings.maxQueueSize) {
-                                console.log(`TTS queue is full (${streamerSettings.maxQueueSize} comments), rejecting direct TTS comment from ${username}`);
                             } else {
                                 // Send to TTS - the client will handle adding to server queue via tts_queue_update
                                 broadcastToStreamers({ type: 'tts', comment: comment });
@@ -353,6 +345,7 @@ io.on('connection', (socket) => {
     socket.on('disconnect-live', () => {
         if (currentTikTokConnection) {
             try {
+                console.log(`Disconnecting from TikTok Live: @${connectedUsername}`);
                 // Disconnect from TikTok Live
                 if (typeof currentTikTokConnection.disconnect === 'function') {
                     currentTikTokConnection.disconnect();
@@ -390,7 +383,9 @@ io.on('connection', (socket) => {
 app.post('/approve', (req, res) => {
     const { id } = req.body;
     const index = unmoderated.findIndex(c => c.id === id);
-    if (index === -1) return res.status(404).json({ error: 'Comment not found' });
+    if (index === -1) {
+        return res.status(404).json({ error: 'Comment not found' });
+    }
 
     const approvedComment = unmoderated.splice(index, 1)[0];
     approved.push(approvedComment);
@@ -416,7 +411,9 @@ app.post('/approve', (req, res) => {
 app.post('/deny', (req, res) => {
     const { id } = req.body;
     const index = unmoderated.findIndex(c => c.id === id);
-    if (index === -1) return res.status(404).json({ error: 'Comment not found' });
+    if (index === -1) {
+        return res.status(404).json({ error: 'Comment not found' });
+    }
 
     const deniedComment = unmoderated.splice(index, 1)[0];
 
